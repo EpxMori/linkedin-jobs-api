@@ -7,9 +7,9 @@ const queryOptions: IQueryOptions = {
   remoteFilter: "remote",
   salary: "100000",
   experienceLevel: "entry level",
-  limit: 1,
+  limit: "1",
   sortBy: "recent",
-  page: 1,
+  page: "1",
 };
 
 query(queryOptions).then((response) => {

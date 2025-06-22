@@ -7,7 +7,7 @@ const testTypeCheck = async () => {
   const queryOptions: IQueryOptions = {
     keyword: "Frontend Developer",
     location: "United States",
-    limit: 1, // Limit to 1 for a quick test
+    limit: "1", // Limit to 1 for a quick test
   };
 
   try {

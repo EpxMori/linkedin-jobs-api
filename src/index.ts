@@ -13,8 +13,8 @@ interface IQueryOptions {
   salary?: '40000' | '60000' | '80000' | '100000' | '120000' | '';
   experienceLevel?: 'internship' | 'entry level' | 'associate' | 'senior' | 'director' | 'executive' | '';
   sortBy?: 'recent' | 'relevant' | '';
-  limit?: number;
-  page?: number;
+  limit?: string;
+  page?: string;
 }
 
 interface IJob {
@@ -79,8 +79,8 @@ class Query {
   private salary: IQueryOptions['salary'];
   private experienceLevel: IQueryOptions['experienceLevel'];
   private sortBy: IQueryOptions['sortBy'];
-  private limit: number;
-  private page: number;
+  private limit: string;
+  private page: string;
 
   constructor(queryObj: IQueryOptions) {
     this.host = queryObj.host || "www.linkedin.com";
@@ -92,8 +92,8 @@ class Query {
     this.salary = queryObj.salary || "";
     this.experienceLevel = queryObj.experienceLevel || "";
     this.sortBy = queryObj.sortBy || "";
-    this.limit = Number(queryObj.limit) || 0;
-    this.page = Number(queryObj.page) || 0;
+    this.limit = queryObj.limit || "";
+    this.page = queryObj.page || "";
   }
 
   private getDateSincePosted(): string {
@@ -155,7 +155,7 @@ class Query {
   }
 
   private getPage(): number {
-    return this.page * 25;
+    return Number(this.page) * 25;
   }
 
   private getUrl(start: number): string {
@@ -277,8 +277,8 @@ class Query {
                 allJobs.push(...jobs);
                 console.log(`Fetched ${jobs.length} jobs. Total: ${allJobs.length}`);
 
-                if (this.limit && allJobs.length >= this.limit) {
-                    allJobs = allJobs.slice(0, this.limit);
+                if (this.limit && allJobs.length >= Number(this.limit)) {
+                    allJobs = allJobs.slice(0, Number(this.limit));
                     break;
                 }
 
