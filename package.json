@@ -11,7 +11,7 @@
     "test": "npm run build && node dist/test.js && node dist/type-check.test.js",
     "build": "tsc",
     "prepublishOnly": "npm run build", 
-    "postinstall": "npm run build"
+    "prepare": "npm run build"
   },
   "repository": {
     "type": "git",
