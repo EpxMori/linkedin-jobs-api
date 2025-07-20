@@ -232,8 +232,8 @@ class Query {
 
   private parseJobList(jobData: string): IJob[] {
     try {
-        const $ = cheerio.load(jobData);
         this.logger && console.log(jobData);
+        const $ = cheerio.load(jobData);
         const jobs = $("li");
 
         return jobs
