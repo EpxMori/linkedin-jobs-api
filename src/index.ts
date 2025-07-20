@@ -133,6 +133,27 @@ class Query {
     return jobTypeRange[this.jobType] || "";
   }
 
+  private sortJobsByAgoTime(jobs: IJob[]): IJob[] {
+    function convertToMinutes(timeStr: string): number {
+      timeStr = timeStr.toLowerCase();
+
+      if (timeStr.includes("just now")) return 0;
+
+      const [numStr, unit] = timeStr.split(" ");
+      const num = parseInt(numStr, 10);
+
+      if (unit.includes("hour")) return num * 60;
+      if (unit.includes("minute")) return num;
+
+      return Infinity; // fallback for unsupported formats
+    }
+
+    return [...jobs].sort((a, b) => {
+      return convertToMinutes(a.agoTime) - convertToMinutes(b.agoTime);
+    });
+  }
+
+
   private getRemoteFilter(): string {
     if (!this.remoteFilter) return "";
     const remoteFilterRange = {
@@ -171,8 +192,7 @@ class Query {
     if (this.getRemoteFilter().length > 0) params.append("f_WT", this.getRemoteFilter());
     if (this.getJobType().length > 0) params.append("f_JT", this.getJobType());
     params.append("start", (start + this.getPage()).toString());
-    if (this.sortBy === "recent") params.append("sortBy", "DD");
-    else if (this.sortBy === "relevant") params.append("sortBy", "R");
+    if (this.sortBy === "relevant") params.append("sortBy", "R");
 
     return query + params.toString();
   }
@@ -282,6 +302,8 @@ class Query {
 
                 allJobs.push(...jobs);
                 console.log(`Fetched ${jobs.length} jobs. Total: ${allJobs.length}`);
+
+                if (this.sortBy === "recent") allJobs = this.sortJobsByAgoTime(allJobs);
 
                 if (this.limit && allJobs.length >= Number(this.limit)) {
                     allJobs = allJobs.slice(0, Number(this.limit));
