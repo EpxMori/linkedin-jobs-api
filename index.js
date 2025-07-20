@@ -146,6 +146,11 @@ Query.prototype.url = function (start) {
   return query + params.toString();
 };
 
+// Add a method to generate a cache key including limit and page
+Query.prototype.getCacheKey = function (start) {
+  return this.url(start) + `&limit=${this.limit}&page=${this.page}`;
+};
+
 Query.prototype.getJobs = async function () {
   let allJobs = [];
   let start = 0;
@@ -155,8 +160,8 @@ Query.prototype.getJobs = async function () {
   const MAX_CONSECUTIVE_ERRORS = 3;
 
   try {
-    // Check cache first
-    const cacheKey = this.url(0);
+    // Check cache first (now includes limit and page)
+    const cacheKey = this.getCacheKey(start);
     const cachedJobs = cache.get(cacheKey);
     if (cachedJobs) {
       console.log("Returning cached results");
@@ -203,9 +208,9 @@ Query.prototype.getJobs = async function () {
       }
     }
 
-    // Cache results if we got any
+    // Cache results if we got any (now includes limit and page)
     if (allJobs.length > 0) {
-      cache.set(this.url(0), allJobs);
+      cache.set(this.getCacheKey(0), allJobs);
     }
 
     return allJobs;
