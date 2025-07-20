@@ -9,7 +9,12 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+        "cheerio": [
+          "./node_modules/cheerio/lib/index.d.ts"
+        ]
+      }
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
