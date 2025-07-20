@@ -15,6 +15,7 @@ interface IQueryOptions {
   sortBy?: 'recent' | 'relevant' | '';
   limit?: string;
   page?: string;
+  logger?: boolean;
 }
 
 interface IJob {
@@ -81,6 +82,7 @@ class Query {
   private sortBy: IQueryOptions['sortBy'];
   private limit: string;
   private page: string;
+  private logger: boolean;
 
   constructor(queryObj: IQueryOptions) {
     this.host = queryObj.host || "www.linkedin.com";
@@ -94,6 +96,7 @@ class Query {
     this.sortBy = queryObj.sortBy || "";
     this.limit = queryObj.limit || "";
     this.page = queryObj.page || "";
+    this.logger = queryObj.logger || false;
   }
 
   private getDateSincePosted(): string {
@@ -230,6 +233,7 @@ class Query {
   private parseJobList(jobData: string): IJob[] {
     try {
         const $ = cheerio.load(jobData);
+        this.logger && console.log(jobData);
         const jobs = $("li");
 
         return jobs
@@ -284,7 +288,7 @@ class Query {
 
     try {
         const cacheKey = this.getCacheKey(start);
-        console.log("Url: ", cacheKey);
+        this.logger && console.log("Url: ", cacheKey);
         const cachedJobs = cache.get(cacheKey);
         if (cachedJobs) {
             console.log("Returning cached results");
