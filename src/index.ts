@@ -7,7 +7,7 @@ interface IQueryOptions {
   host?: string;
   keyword?: string;
   location?: string;
-  dateSincePosted?: 'past month' | 'past week' | '24hr' | '';
+  dateSincePosted?: 'past month' | 'past week' | '24hr' | '1hr' |'';
   jobType?: 'full time' | 'part time' | 'contract' | 'temporary' | 'volunteer' | 'internship' | '';
   remoteFilter?: 'on-site' | 'remote' | 'hybrid' | '';
   salary?: '40000' | '60000' | '80000' | '100000' | '120000' | '';
@@ -102,6 +102,7 @@ class Query {
       "past month": "r2592000",
       "past week": "r604800",
       "24hr": "r86400",
+      "1hr": "r3600",
     };
     return dateRange[this.dateSincePosted] || "";
   }
@@ -222,7 +223,7 @@ class Query {
                     const salary = job.find(".job-search-card__salary-info").text().trim().replace(/\s+/g, " ");
                     const jobUrl = job.find(".base-card__full-link").attr("href") || "";
                     const companyLogo = job.find(".artdeco-entity-image").attr("data-delayed-url") || "";
-                    const agoTime = job.find(".job-search-card__listdate").text().trim() || "";
+                    const agoTime = job.find(".job-search-card__listdate--new").text().trim() || "";
 
                     if (!position || !company) return null;
 
@@ -249,6 +250,10 @@ class Query {
     }
   }
 
+  private getCacheKey(start: number) {
+    return this.getUrl(start) + `&limit=${this.limit}&page=${this.page}`;
+  };
+
   public async getJobs(): Promise<IJob[]> {
     let allJobs: IJob[] = [];
     let start = 0;
@@ -258,7 +263,8 @@ class Query {
     const MAX_CONSECUTIVE_ERRORS = 3;
 
     try {
-        const cacheKey = this.getUrl(0);
+        const cacheKey = this.getCacheKey(start);
+        console.log("Url: ", cacheKey);
         const cachedJobs = cache.get(cacheKey);
         if (cachedJobs) {
             console.log("Returning cached results");
@@ -298,7 +304,7 @@ class Query {
         }
 
         if (allJobs.length > 0) {
-            cache.set(this.getUrl(0), allJobs);
+            cache.set(this.getCacheKey(0), allJobs);
         }
 
         return allJobs;
