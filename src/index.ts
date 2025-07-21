@@ -7,7 +7,7 @@ interface IQueryOptions {
   host?: string;
   keyword?: string;
   location?: string;
-  dateSincePosted?: 'past month' | 'past week' | '24hr' | '1hr' |'';
+  dateSincePosted?: 'past month' | 'past week' | '24hr' | '1hr' | '';
   jobType?: 'full time' | 'part time' | 'contract' | 'temporary' | 'volunteer' | 'internship' | '';
   remoteFilter?: 'on-site' | 'remote' | 'hybrid' | '';
   salary?: '40000' | '60000' | '80000' | '100000' | '120000' | '';
@@ -84,10 +84,14 @@ class Query {
   private page: string;
   private logger: boolean;
 
+  // New properties for the enhanced approach
+  private readonly pageUrl: string;
+  private readonly jobsUrl: string;
+
   constructor(queryObj: IQueryOptions) {
     this.host = queryObj.host || "www.linkedin.com";
-    this.keyword = queryObj.keyword?.trim().replace(/\s+/g, "+") || "";
-    this.location = queryObj.location?.trim().replace(/\s+/g, "+") || "";
+    this.keyword = queryObj.keyword?.trim() || "" ;
+    this.location = queryObj.location?.trim() || "";
     this.dateSincePosted = queryObj.dateSincePosted || "";
     this.jobType = queryObj.jobType || "";
     this.remoteFilter = queryObj.remoteFilter || "";
@@ -97,6 +101,10 @@ class Query {
     this.limit = queryObj.limit || "";
     this.page = queryObj.page || "";
     this.logger = queryObj.logger || false;
+
+    // Initialize URLs for the enhanced approach
+    this.pageUrl = `https://${this.host}/jobs/search`;
+    this.jobsUrl = `https://${this.host}/jobs-guest/jobs/api/seeMoreJobPostings/search`;
   }
 
   private getDateSincePosted(): string {
@@ -156,7 +164,6 @@ class Query {
     });
   }
 
-
   private getRemoteFilter(): string {
     if (!this.remoteFilter) return "";
     const remoteFilterRange = {
@@ -183,8 +190,25 @@ class Query {
     return Number(this.page) * 25;
   }
 
+  // New method: Get search page URL with all filters
+  private getSearchPageUrl(): string {
+    const params = new URLSearchParams();
+    
+    if (this.keyword) params.append("keywords", this.keyword);
+    if (this.location) params.append("location", this.location);
+    if (this.getDateSincePosted().length > 0) params.append("f_TPR", this.getDateSincePosted());
+    if (this.getSalary().length > 0) params.append("f_SB2", this.getSalary());
+    if (this.getExperienceLevel().length > 0) params.append("f_E", this.getExperienceLevel());
+    if (this.getRemoteFilter().length > 0) params.append("f_WT", this.getRemoteFilter());
+    if (this.getJobType().length > 0) params.append("f_JT", this.getJobType());
+    params.append("position", "1");
+    params.append("pageNum", "0");
+    if (this.sortBy === "relevant") params.append("sortBy", "R");
+
+    return `${this.pageUrl}?${params.toString()}`;
+  }
+
   private getUrl(start: number): string {
-    let query = `https://${this.host}/jobs-guest/jobs/api/seeMoreJobPostings/search?`;
     const params = new URLSearchParams();
 
     if (this.keyword) params.append("keywords", this.keyword);
@@ -197,7 +221,58 @@ class Query {
     params.append("start", (start + this.getPage()).toString());
     if (this.sortBy === "relevant") params.append("sortBy", "R");
 
-    return query + params.toString();
+    return `${this.jobsUrl}?${params.toString()}`;
+  }
+
+  // New method: Get total pages from the main search page
+  private async getTotalPages(): Promise<number> {
+    const headers = {
+      "User-Agent": randomUseragent.getRandom()!,
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Connection": "keep-alive",
+      "Upgrade-Insecure-Requests": "1",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
+    };
+
+    try {
+      const url = this.getSearchPageUrl();
+      this.logger && console.log("Fetching search page:", url);
+      
+      const response = await axios.get<string>(url, {
+        headers,
+        timeout: 15000,
+      });
+
+      const $ = cheerio.load(response.data);
+      
+      // Try multiple selectors for job count
+      let jobsCountText = $('.results-context-header__job-count').text().trim();
+      if (!jobsCountText) {
+        jobsCountText = $('[data-test="results-context-header-job-count"]').text().trim();
+      }
+      if (!jobsCountText) {
+        jobsCountText = $('.jobs-search-results-list__subtitle').text().trim();
+      }
+
+      this.logger && console.log("Jobs count text:", jobsCountText);
+
+      // Extract number from text like "1,234 jobs" or "1234 results"
+      const jobsCount = parseInt(jobsCountText.replace(/[^\d]/g, '') || '0', 10);
+      const totalPages = Math.max(1, Math.ceil(jobsCount / 25)); // 25 jobs per page
+
+      this.logger && console.log(`Found ${jobsCount} jobs, ${totalPages} pages`);
+      
+      return Math.min(totalPages, 40); // LinkedIn typically limits results to ~1000 jobs
+    } catch (error: any) {
+      console.warn("Error getting total pages, falling back to pagination:", error.message);
+      return 40; // Fallback to maximum pages
+    }
   }
 
   private async fetchJobBatch(start: number): Promise<IJob[]> {
@@ -206,7 +281,7 @@ class Query {
         "Accept": "application/json, text/javascript, */*; q=0.01",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
-        "Referer": "https://www.linkedin.com/jobs",
+        "Referer": this.getSearchPageUrl(),
         "X-Requested-With": "XMLHttpRequest",
         "Connection": "keep-alive",
         "Sec-Fetch-Dest": "empty",
@@ -232,7 +307,6 @@ class Query {
 
   private parseJobList(jobData: string): IJob[] {
     try {
-        this.logger && console.log(jobData);
         const $ = cheerio.load(jobData);
         const jobs = $("li");
 
@@ -245,9 +319,20 @@ class Query {
                     const location = job.find(".job-search-card__location").text().trim();
                     const date = job.find("time").attr("datetime") || "";
                     const salary = job.find(".job-search-card__salary-info").text().trim().replace(/\s+/g, " ");
-                    const jobUrl = job.find(".base-card__full-link").attr("href") || "";
+                    
+                    // Enhanced job URL extraction
+                    let jobUrl = job.find(".base-card__full-link").attr("href") || "";
+                    if (!jobUrl) {
+                        jobUrl = job.find("a").attr("href") || "";
+                    }
+                    // Clean URL by removing tracking parameters
+                    if (jobUrl) {
+                        jobUrl = jobUrl.split('?')[0];
+                    }
+                    
                     const companyLogo = job.find(".artdeco-entity-image").attr("data-delayed-url") || "";
-                    const agoTime = job.find(".job-search-card__listdate--new").text().trim() || "";
+                    const agoTime = job.find(".job-search-card__listdate--new").text().trim() || 
+                                   job.find(".job-search-card__listdate").text().trim() || "";
 
                     if (!position || !company) return null;
 
@@ -282,7 +367,6 @@ class Query {
     let allJobs: IJob[] = [];
     let start = 0;
     const BATCH_SIZE = 25;
-    let hasMore = true;
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 3;
 
@@ -295,36 +379,45 @@ class Query {
             return cachedJobs;
         }
 
-        while (hasMore) {
+        // Get total pages using the new method
+        const totalPages = await this.getTotalPages();
+        console.log(`Planning to fetch up to ${totalPages} pages`);
+
+        let currentPage = 0;
+        while (currentPage < totalPages) {
             try {
                 const jobs = await this.fetchJobBatch(start);
 
                 if (!jobs || jobs.length === 0) {
-                    hasMore = false;
+                    console.log("No more jobs found, stopping pagination");
                     break;
                 }
 
                 allJobs.push(...jobs);
-                console.log(`Fetched ${jobs.length} jobs. Total: ${allJobs.length}`);
+                console.log(`Fetched ${jobs.length} jobs from page ${currentPage + 1}/${totalPages}. Total: ${allJobs.length}`);
 
                 if (this.sortBy === "recent") allJobs = this.sortJobsByAgoTime(allJobs);
 
                 if (this.limit && allJobs.length >= Number(this.limit)) {
                     allJobs = allJobs.slice(0, Number(this.limit));
+                    console.log(`Reached limit of ${this.limit} jobs`);
                     break;
                 }
 
                 consecutiveErrors = 0;
+                currentPage++;
                 start += BATCH_SIZE;
 
+                // Add delay between requests to be respectful
                 await delay(2000 + Math.random() * 1000);
             } catch (error: any) {
                 consecutiveErrors++;
-                console.error(`Error fetching batch (attempt ${consecutiveErrors}):`, error.message);
+                console.error(`Error fetching page ${currentPage + 1} (attempt ${consecutiveErrors}):`, error.message);
                 if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                     console.log("Max consecutive errors reached. Stopping.");
                     break;
                 }
+                // Exponential backoff
                 await delay(Math.pow(2, consecutiveErrors) * 1000);
             }
         }
@@ -333,6 +426,7 @@ class Query {
             cache.set(this.getCacheKey(0), allJobs);
         }
 
+        console.log(`Final result: ${allJobs.length} jobs fetched`);
         return allJobs;
     } catch (error: any) {
         console.error("Fatal error in job fetching:", error);

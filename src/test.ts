@@ -1,11 +1,13 @@
 import { query, IQueryOptions } from "./index";
 
 const queryOptions: IQueryOptions = {
-  location: "India",
-  dateSincePosted: "1hr",
-  limit: "1",
+  location: "Philippines",
+  dateSincePosted: "24hr",
+  limit: "30",
   sortBy: "recent",
   page: "0",
+  keyword: "Back End Developer",
+  logger: true,
 };
 
 query(queryOptions).then((response) => {
