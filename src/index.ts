@@ -32,44 +32,6 @@ interface IJob {
 // Utility functions
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Cache implementation
-class JobCache {
-  private cache = new Map<string, { data: IJob[]; timestamp: number }>();
-  private TTL = 1000 * 60 * 60; // 1 hour
-
-  set(key: string, value: IJob[]): void {
-    this.cache.set(key, {
-      data: value,
-      timestamp: Date.now(),
-    });
-  }
-
-  get(key: string): IJob[] | null {
-    const item = this.cache.get(key);
-    if (!item) return null;
-    if (Date.now() - item.timestamp > this.TTL) {
-      this.cache.delete(key);
-      return null;
-    }
-    return item.data;
-  }
-
-  clear(): void {
-    const now = Date.now();
-    for (const [key, value] of this.cache.entries()) {
-      if (now - value.timestamp > this.TTL) {
-        this.cache.delete(key);
-      }
-    }
-  }
-
-  get size(): number {
-    return this.cache.size;
-  }
-}
-
-const cache = new JobCache();
-
 class Query {
   private host: string;
   private keyword: string;
@@ -84,7 +46,6 @@ class Query {
   private page: string;
   private logger: boolean;
 
-  // New properties for the enhanced approach
   private readonly pageUrl: string;
   private readonly jobsUrl: string;
 
@@ -102,7 +63,6 @@ class Query {
     this.page = queryObj.page || "";
     this.logger = queryObj.logger || false;
 
-    // Initialize URLs for the enhanced approach
     this.pageUrl = `https://${this.host}/jobs/search`;
     this.jobsUrl = `https://${this.host}/jobs-guest/jobs/api/seeMoreJobPostings/search`;
   }
@@ -190,7 +150,6 @@ class Query {
     return Number(this.page) * 25;
   }
 
-  // New method: Get search page URL with all filters
   private getSearchPageUrl(): string {
     const params = new URLSearchParams();
     
@@ -224,7 +183,6 @@ class Query {
     return `${this.jobsUrl}?${params.toString()}`;
   }
 
-  // New method: Get total pages from the main search page
   private async getTotalPages(): Promise<number> {
     const headers = {
       "User-Agent": randomUseragent.getRandom()!,
@@ -251,7 +209,6 @@ class Query {
 
       const $ = cheerio.load(response.data);
       
-      // Try multiple selectors for job count
       let jobsCountText = $('.results-context-header__job-count').text().trim();
       if (!jobsCountText) {
         jobsCountText = $('[data-test="results-context-header-job-count"]').text().trim();
@@ -262,16 +219,15 @@ class Query {
 
       this.logger && console.log("Jobs count text:", jobsCountText);
 
-      // Extract number from text like "1,234 jobs" or "1234 results"
       const jobsCount = parseInt(jobsCountText.replace(/[^\d]/g, '') || '0', 10);
-      const totalPages = Math.max(1, Math.ceil(jobsCount / 25)); // 25 jobs per page
+      const totalPages = Math.max(1, Math.ceil(jobsCount / 25));
 
       this.logger && console.log(`Found ${jobsCount} jobs, ${totalPages} pages`);
       
-      return Math.min(totalPages, 40); // LinkedIn typically limits results to ~1000 jobs
+      return Math.min(totalPages, 40);
     } catch (error: any) {
       console.warn("Error getting total pages, falling back to pagination:", error.message);
-      return 40; // Fallback to maximum pages
+      return 40;
     }
   }
 
@@ -320,12 +276,10 @@ class Query {
                     const date = job.find("time").attr("datetime") || "";
                     const salary = job.find(".job-search-card__salary-info").text().trim().replace(/\s+/g, " ");
                     
-                    // Enhanced job URL extraction
                     let jobUrl = job.find(".base-card__full-link").attr("href") || "";
                     if (!jobUrl) {
                         jobUrl = job.find("a").attr("href") || "";
                     }
-                    // Clean URL by removing tracking parameters
                     if (jobUrl) {
                         jobUrl = jobUrl.split('?')[0];
                     }
@@ -359,10 +313,6 @@ class Query {
     }
   }
 
-  private getCacheKey(start: number) {
-    return this.getUrl(start) + `&limit=${this.limit}&page=${this.page}`;
-  };
-
   public async getJobs(): Promise<IJob[]> {
     let allJobs: IJob[] = [];
     let start = 0;
@@ -371,15 +321,9 @@ class Query {
     const MAX_CONSECUTIVE_ERRORS = 3;
 
     try {
-        const cacheKey = this.getCacheKey(start);
-        this.logger && console.log("Url: ", cacheKey);
-        const cachedJobs = cache.get(cacheKey);
-        if (cachedJobs) {
-            console.log("Returning cached results");
-            return cachedJobs;
-        }
+        // Always fetch fresh data - no cache check
+        this.logger && console.log("Fetching fresh job data...");
 
-        // Get total pages using the new method
         const totalPages = await this.getTotalPages();
         console.log(`Planning to fetch up to ${totalPages} pages`);
 
@@ -422,11 +366,7 @@ class Query {
             }
         }
 
-        if (allJobs.length > 0) {
-            cache.set(this.getCacheKey(0), allJobs);
-        }
-
-        console.log(`Final result: ${allJobs.length} jobs fetched`);
+        console.log(`Final result: ${allJobs.length} fresh jobs fetched`);
         return allJobs;
     } catch (error: any) {
         console.error("Fatal error in job fetching:", error);
@@ -441,14 +381,8 @@ const query = (queryObject: IQueryOptions): Promise<IJob[]> => {
   return query.getJobs();
 };
 
-const clearCache = (): void => cache.clear();
-const getCacheSize = (): number => cache.size;
-
 export {
     query,
-    JobCache,
-    clearCache,
-    getCacheSize,
     IQueryOptions,
     IJob
 };
